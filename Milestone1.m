@@ -20,8 +20,8 @@ frac_z = 0;
 
 
 % Reflection Coefficients
-RL = [0, 0.9];
-RR = [0, 0.9];
+RL = 0.9*(1j);
+RR = 0.9*(1j);
 
 
 % 1D spatial domain
@@ -31,17 +31,18 @@ x = linspace(X1,X2,set_length);
 t = 0;
 
 % Forward and reverse wave components
-Ef = zeros(2, set_length);
-Er = zeros(2, set_length);
+Ef = zeros(1, set_length);
+Er = zeros(1, set_length);
 
 
 % Input stream
 input_length = 10;
-E_in = zeros(2, input_length);
+E_in = zeros(1, input_length);
+
 
 % Populate the values to feed in as input
-for i = 1:input_length
-    E_in(1, i) = i*(10-i);
+for iter = 1:input_length
+    E_in(1, iter) = iter*(10-iter);
 end
 
 
@@ -52,6 +53,7 @@ fig_height = 420;
 global fig
 fig = uifigure("Name","Control Panel");
 fig.Position = [fig.Position(1:2), fig_width, fig_height];
+fig.Visible = "off";
 
 % Toggle the control panel's visibility by pressing 'v' while the
 % simulation is running
@@ -140,11 +142,16 @@ set(fig_graph, "KeyPressFcn", @toggle_vis);
 ax = subplot(3, 1, 1);
 % properties(ax)
 
-% hold on 
-plt1 = plot(x, Ef(1, :), "-", x, Ef(2, :), "--");
+
+% hold on
+size_ef_real = size(real(Ef(1, :)))
+size_ef_imag = size(imag(Ef(1, :)))
+size_er_real = size(real(Er(1, :)))
+size_er_imag = size(imag(Er(1, :)))
+plt1 = plot(x, real(Ef(1, :)), "-", x, imag(Ef(1, :)), "--");
 
 subplot(3, 1, 2);
-plt2 = plot(x, Er(1, :), "-", x, Er(2, :), "--");
+plt2 = plot(x, real(Er(1, :)), "-", x, imag(Er(1, :)), "--");
 
 
 
@@ -163,7 +170,7 @@ total_shift = 0;
 prev_total_shift = 0;
 
 % Steps the simulation
-for i = 1:10*num_steps
+for iter = 1:10*num_steps
 
     n = sld.Value;
     vg = c/n;
@@ -194,43 +201,32 @@ for i = 1:10*num_steps
     shift_comp = set_length - shift + 1;
 
     % Debug message printing shift/frac information
-    if (i < 20)
+    if (iter < 20)
 
         msg_format = "[%d] Shift = %d, frac_z = %f, total_shift = %d, prev_total_shift = %d\n";
-        message = sprintf(msg_format, i, shift, frac_z, total_shift, prev_total_shift);
+        message = sprintf(msg_format, iter, shift, frac_z, total_shift, prev_total_shift);
 
         fprintf(message);
     end
 
     
     % ===== Step forward field ===== %
-
-    last_fwd_seg = [Ef(1, shift_comp:set_length); ...
-        Ef(2, shift_comp:set_length)];
+    last_fwd_seg = Ef(1, shift_comp:set_length);
 
     % Translate all elements over by 'shift' units
     Ef(1, 1+shift:set_length) = Ef(1, 1:set_length-shift);
-    Ef(2, 1+shift:set_length) = Ef(2, 1:set_length-shift);
 
     % Zero out the outlying first 'shift' rows, ready to be written with
     % new data
-    Ef(1, 1:shift) = flip(Er(1, 1:shift), 2);
-    Ef(2, 1:shift) = flip(Er(2, 1:shift), 2);
-    
 
-    fwd_matrix = [RL(1), -RL(2); RL(2), RL(1)];
-    rev_matrix = [RR(1), -RR(2); RR(2), RR(1)];
+    Er_le = flip(Er(1, 1:shift), 2);
 
+    Ef_real_le = real(Er_le);
+    Ef_imag_le = imag(Er_le);
+    Ef(1, 1:shift) = Ef_real_le(1, 1:shift) + (1j)*Ef_imag_le(1, 1:shift);
 
-    fwd_real_seg = reshape(Ef(1, 1:shift), [shift, 1]);
-    fwd_im_seg = reshape(Ef(2, 1:shift), [shift, 1]);
+    Ef(1, 1:shift) = Ef(1, 1:shift) * RL;
 
-    fwd_seg = [fwd_real_seg, fwd_im_seg];
-
-    fwd_new_seg = fwd_seg * fwd_matrix;
-
-    Ef(1, 1:shift) = fwd_new_seg(:,1);
-    Ef(2, 1:shift) = fwd_new_seg(:,2);
 
 
 
@@ -238,64 +234,27 @@ for i = 1:10*num_steps
     % Should be filling the first 'shift' elements
     if total_shift <= input_length
         Ef(1, 1:shift) = Ef(1, 1:shift) + flip(E_in(1, prev_total_shift+1:total_shift), 2);
-        Ef(2, 1:shift) = Ef(2, 1:shift) + flip(E_in(2, prev_total_shift+1:total_shift), 2);
     end
 
 
-    set(plt1(1), 'XData', x, 'YData', Ef(1, :));
-    set(plt1(2), 'XData', x, 'YData', Ef(2, :));
+    Ef_real = real(Ef(1, :));
+    Ef_imag = imag(Ef(1, :));
+
+    
+
+    set(plt1(1), 'XData', x, 'YData', Ef_real);
+    set(plt1(2), 'XData', x, 'YData', Ef_imag);
 
 
     % Step reverse field
     Er(1, 1:set_length-shift) = Er(1, 1+shift:set_length);
-    Er(2, 1:set_length-shift) = Er(2, 1+shift:set_length);
-
     Er(1, shift_comp:set_length) = flip(last_fwd_seg(1, :), 2);
-    Er(2, shift_comp:set_length) = flip(last_fwd_seg(2, :), 2);
 
-    % size(last_fwd_seg)
-    % test = last_fwd_seg(1, :);
+    Er(1, shift_comp:set_length) = Er(1, shift_comp:set_length) * RR;
 
 
-    rev_real_seg = reshape(Er(1, shift_comp:set_length), [shift, 1]);
-    rev_im_seg = reshape(Er(2,shift_comp:set_length), [shift, 1]);
-
-    rev_seg = [rev_real_seg, rev_im_seg];
-
-    rev_new_seg = rev_seg * rev_matrix;
-
-    Er(1, shift_comp:set_length) = rev_new_seg(:,1);
-    Er(2, shift_comp:set_length) = rev_new_seg(:,2);
-
-
-    %{
-    if (det(rev_im) ~= 0) && (first_rev == 0)
-        rev_im
-        det(rev_im)
-        first_rev = 1
-    end
-    %}
-
-
-    set(plt2(1), 'XData', x, 'YData', Er(1, :));
-    set(plt2(2), 'XData', x, 'YData', Er(2, :));
-
-    % Nonzero values in the imaginary component of the reverse wave
-    %{
-    rev_nonzero_im = nonzeros(Er(2, :));
-
-    if ((size(rev_nonzero_im, 1) > 0) && (size(rev_nonzero_im, 1) < 9))
-        fprintf("==== [%d]==== ", i);
-        shift
-        rev_nonzero_im
-
-        rev_seg
-        rev_matrix
-        test
-        last_fwd_seg
-
-    end
-    %}
+    set(plt2(1), 'XData', x, 'YData', real(Er(1, :)));
+    set(plt2(2), 'XData', x, 'YData', imag(Er(1, :)));
     
 
     pause(0.02);
