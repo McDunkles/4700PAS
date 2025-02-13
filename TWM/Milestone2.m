@@ -161,10 +161,26 @@ ylim([-10, 10]);
 % lgd.FontSize = 5;
 
 
+
+% Bottom right plot - Phase shift
+
+subplot(3, 2, 6);
+temp_dom = 1:set_length;
+
+temporal_phase_shift = zeros(1,sim_ticks);
+
+plt6 = plot(time_dom, temporal_phase_shift, "-r");
+
+title("Temporal Phase Shift");
+xlabel("Time (ps)");
+ylabel("Phase (E_{f})");
+
+
+
 pause_freq = 3;
 break_freq = 10;
 
-
+total_phase_shift = 0;
 % Main simulation
 for iter = 1:sim_ticks
     
@@ -184,6 +200,10 @@ for iter = 1:sim_ticks
     set(plt1(1), 'XData', x, 'YData', real(Ef));
     set(plt1(2), 'XData', x, 'YData', imag(Ef));
 
+    total_phase_shift = total_phase_shift - real(B(iter));
+    temporal_phase_shift(1, iter) = total_phase_shift;
+    set(plt6(1), 'XData', time_dom, 'YData', temporal_phase_shift);
+    
 
 
     % ===== (2) Update graphs of fields at the boundaries =====
