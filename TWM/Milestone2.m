@@ -1,16 +1,14 @@
 % Define start and end points (Say these are in meters)
-total_z = 2;
-dzi = 0.01;
-set_length = ((total_z)/dzi) + 1;
+len_z = 0.04;
+dzi = 0.0001;
+set_length = ((len_z)/dzi) + 1;
 
-
-
-
+dt = 10^-12;
 
 % Number of ticks in the simulation
-sim_ticks = 5*(set_length-1);
+sim_ticks = 2*(set_length-1);
 
-
+v_g = dzi/dt;
 
 
 % Reflection Coefficients
@@ -19,7 +17,7 @@ RR = 0.9*(1j);
 
 
 % 1D spatial domain
-x = linspace(X1,X2,set_length);
+x = linspace(0,len_z,set_length);
 
 
 % Forward and reverse wave components
@@ -29,22 +27,35 @@ Er = zeros(1, set_length);
 E_net = Ef + Er;
 
 %
-B_env = 0.01 + 0.003*(1j);
+B_env = 0.5 + 0.0001*(1j);
 % B_env = 0;
 B = B_env.*ones(1, set_length);
 
 
 % Gaussian params
-u_gaus = 10;
-s_gaus = 4;
-amp_gaus = 3;
+u_gaus = 100;
+s_gaus = 25;
+amp_gaus = 6;
 
 % Input stream
 input_length = 2*u_gaus;
 E_in = zeros(1, input_length);
+
+% fft/input stuff
+fft_len = 8000;
+sample_rate = 2000;
+freq = 500;
+period = 1/freq;
+omega = 2*pi*freq;
+total_time = fft_len/sample_rate;
+E_wave = amp_gaus*cos(omega*(0:input_length-1)/sample_rate);
+
+freq_precision = sample_rate/fft_len;
+
+% E_in(1, 1:input_length) = E_wave;
 E_in(1, 1:input_length) = f_gaus(amp_gaus, u_gaus, s_gaus, 0:input_length-1)
 
-x_max = 2*max(E_in);
+y_max = 1.5*max(E_in);
 
 % Now we create the figure that will hold the graphs
 fig_graph = figure("Name","Graphs");
@@ -53,16 +64,16 @@ fig_graph = figure("Name","Graphs");
 ax = subplot(3, 2, 1);
 plt1 = plot(x, real(Ef(1, :)), "-", x, imag(Ef(1, :)), "--");
 title("Forward Component");
-ylim([-x_max, x_max]);
+ylim([-y_max, y_max]);
 xlabel("z (m)");
 ylabel("E_f(z)");
 
 
-% Middle Plot - Holds the forward wave component
+% Middle Plot - Holds the reverse wave component
 subplot(3, 2, 3);
-plt2 = plot(x, real(Er(1, :)), "-", x, imag(Er(1, :)), "--");
+plt3 = plot(x, real(Er(1, :)), "-", x, imag(Er(1, :)), "--");
 title("Reverse Component");
-ylim([-x_max, x_max]);
+ylim([-y_max, y_max]);
 xlabel("z (m)");
 ylabel("E_r(z)");
 
@@ -70,11 +81,6 @@ ylabel("E_r(z)");
 
 % Bottom Plot - Wave Input/Output Amplitudes at the boundaries
 subplot(3, 2, 5);
-
-fft_len = 512;
-
-E_net = Ef + Er;
-E_fft_in = fft(E_, fft_len);
 
 
 % This will be the independent variable for the bottom plot
@@ -85,7 +91,7 @@ left_output = zeros(1, sim_ticks);
 right_input = zeros(1, sim_ticks);
 right_output = zeros(1, sim_ticks);
 
-plt3 = plot( ...
+plt5 = plot( ...
     time_dom, left_input, "-r", ...
     time_dom, left_output, "-g", ...
     time_dom, right_input, "-b", ...
@@ -102,33 +108,57 @@ lgd.FontSize = 6;
 % Top right plot - Left Input vs Right Output
 subplot(3, 2, 2);
 
-plt4 = plot( ...
+plt2 = plot( ...
     time_dom, left_input, "-r", ...
-    time_dom, right_output, "-g");
+    time_dom, real(right_output), "-g", ...
+    time_dom, imag(right_output), "-b");
 
 title("Left Input vs Right Output Waveforms");
 xlabel("t (ps)");
 ylabel("Right Output");
-ylim([-x_max, x_max]);
+ylim([-y_max, y_max]);
 
 
 % Middle right plot - E-Field FFT
+
 subplot(3, 2, 4);
 temp_dom = 1:set_length;
 
-plt5 = plot( ...
-    temp_dom, left_input, "-r", ...
-    temp_dom, right_output, "-b");
+fft_domain = freq_precision*(-fft_len/2:(fft_len/2)-1);
+
+% E_fft_in = fft(E_in, fft_len);
+E_fft_in = fft(left_input, fft_len);
+fft_in_abs = abs(E_fft_in);
+fft_in_abs = fftshift(fft_in_abs);
+
+
+E_fft_out = fft(right_output, fft_len);
+fft_out_abs = abs(E_fft_out);
+fft_out_abs = fftshift(fft_out_abs);
+
+plt4 = plot( ...
+    fft_domain, fft_in_abs, "-r", ...
+    fft_domain, fft_out_abs, "-b");
 
 
 
 title("Left Input vs Right Output Waveforms");
-xlabel("t (ps)");
+xlabel("Frequency (Hz)");
 ylabel("Right Output");
-ylim([-x_max, x_max]);
 
-lgd = legend("Left Input", "Right Output");
-lgd.FontSize = 5;
+fft_min = min(min(fft_in_abs, fft_out_abs));
+fft_max = max(max(fft_in_abs, fft_out_abs));
+
+if min(fft_in_abs) == max(fft_in_abs)
+    fft_min = fft_min - 1;
+    fft_max = fft_max + 1;
+end
+
+% ylim([min(fft_in_abs), max(fft_in_abs)]);
+ylim([-10, 10]);
+
+% lgd = legend("Left Input", "Right Output");
+% lgd.FontSize = 5;
 
 
 pause_freq = 3;
@@ -159,23 +189,38 @@ for iter = 1:sim_ticks
     % ===== (2) Update graphs of fields at the boundaries =====
     left_input(1, iter) = E_in(1, input_length);
     left_output(1, iter) = abs(RL.*Er(1, 1));
-    right_output(1, iter) = abs(RR.*last_fwd_seg);
+    right_output(1, iter) = RR.*last_fwd_seg;
 
-    set(plt3(1), 'XData', time_dom, 'YData', left_input);
-    set(plt3(2), 'XData', time_dom, 'YData', left_output);
-    set(plt3(4), 'XData', time_dom, 'YData', right_output);
+    set(plt5(1), 'XData', time_dom, 'YData', left_input);
+    set(plt5(2), 'XData', time_dom, 'YData', left_output);
+    set(plt5(4), 'XData', time_dom, 'YData', abs(right_output));
 
     % Update top right graph
-    set(plt4(1), 'XData', time_dom, 'YData', left_input);
-    set(plt4(2), 'XData', time_dom, 'YData', right_output);
+    set(plt2(1), 'XData', time_dom, 'YData', left_input);
+    set(plt2(2), 'XData', time_dom, 'YData', real(right_output));
+    set(plt2(3), 'XData', time_dom, 'YData', imag(right_output));
+
+    % Update fft plot
+    E_fft_in = fft(left_input, fft_len);
+    fft_in_abs = abs(E_fft_in);
+    fft_in_abs = fftshift(fft_in_abs);
+    
+    
+    E_fft_out = fft(right_output, fft_len);
+    fft_out_abs = abs(E_fft_out);
+    fft_out_abs = fftshift(fft_out_abs);
+
+    set(plt4(1), 'XData', fft_domain, 'YData', fft_in_abs);
+    set(plt4(2), 'XData', fft_domain, 'YData', fft_out_abs);
+    
 
 
     % ===== (3) Step reverse field =====
     Er(1, 1:set_length-1) = Er(1, 2:set_length).*exp(-(1j).*B(2:set_length));
     Er(1, set_length) = last_fwd_seg * RR;
 
-    set(plt2(1), 'XData', x, 'YData', real(Er(1, :)));
-    set(plt2(2), 'XData', x, 'YData', imag(Er(1, :)));
+    set(plt3(1), 'XData', x, 'YData', real(Er(1, :)));
+    set(plt3(2), 'XData', x, 'YData', imag(Er(1, :)));
 
 
 
